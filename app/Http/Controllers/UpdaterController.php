@@ -61,7 +61,9 @@ class UpdaterController extends Controller
             ]);
         }
 
-        if (SystemUpdater::hasUncommittedChanges()) {
+        $force = (bool) $request->input('force', false);
+
+        if (!$force && SystemUpdater::hasUncommittedChanges()) {
             return response()->stream(function (): void {
                 echo json_encode([
                     'step' => 'ERROR',
@@ -72,7 +74,7 @@ class UpdaterController extends Controller
             ]);
         }
 
-        return response()->stream(function (): void {
+        return response()->stream(function () use ($force): void {
             // Disable output buffering
             while (ob_get_level() > 0) {
                 ob_end_flush();
@@ -90,7 +92,7 @@ class UpdaterController extends Controller
                 flush();
             };
 
-            $success = SystemUpdater::runUpdateStreamed($logOutput);
+            $success = SystemUpdater::runUpdateStreamed($logOutput, $force);
 
             if ($success) {
                 $logOutput('SUCCESS', 'Application updated successfully!');

@@ -128,7 +128,7 @@
                         {{ $updateCheck['message'] }}
                     </p>
 
-                    @if ($updateCheck['behind'] && !$hasChanges)
+                    @if ($updateCheck['behind'])
                         <div class="text-xs text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 p-3 rounded-xl space-y-2">
                             <div class="font-semibold flex items-center gap-1">
                                 <x-ming-icon name="system.warning" class="h-4 w-4 text-rose-500" /> Database Backup Required
@@ -140,16 +140,22 @@
                             </label>
                         </div>
 
+                        @if ($hasChanges)
+                            <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3 rounded-xl space-y-2">
+                                <div class="font-semibold flex items-center gap-1">
+                                    <x-ming-icon name="system.warning" class="h-4 w-4 text-amber-500" /> Local Modifications Detected
+                                </div>
+                                <p>You have uncommitted modifications or deleted system files (such as the deleted install folder or storage symlink). To update successfully, you must discard these changes.</p>
+                                <label class="flex items-start gap-2 cursor-pointer mt-2">
+                                    <input type="checkbox" id="force-confirm" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 mt-0.5">
+                                    <span class="font-medium text-slate-700 dark:text-slate-300 select-none">Discard modifications and force update.</span>
+                                </label>
+                            </div>
+                        @endif
+
                         <button type="button" id="install-update-btn" onclick="startUpdate()" class="w-full btn-primary flex items-center justify-center gap-2">
                             <x-ming-icon name="system.refresh-2" class="h-4 w-4 animate-spin-hover" />
                             Install Updates Now
-                        </button>
-                    @elseif ($hasChanges)
-                        <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 p-3 rounded-xl">
-                            Commit or discard local uncommitted files to enable updates.
-                        </div>
-                        <button class="w-full btn-primary opacity-50 cursor-not-allowed" disabled>
-                            Install Updates (Disabled)
                         </button>
                     @else
                         <button class="w-full btn-secondary cursor-not-allowed" disabled>
@@ -193,15 +199,23 @@
         async function startUpdate() {
             const btn = document.getElementById('install-update-btn');
             const backupCheck = document.getElementById('backup-confirm');
+            const forceCheck = document.getElementById('force-confirm');
 
             if (!backupCheck || !backupCheck.checked) {
                 alert("Please confirm you have backed up your database before proceeding.");
                 return;
             }
 
+            if (forceCheck && !forceCheck.checked) {
+                alert("Please check the box to discard local modifications to enable updating.");
+                return;
+            }
+
             if (!confirm("Are you sure you want to install updates now? The system will enter maintenance mode during this process.")) {
                 return;
             }
+
+            const force = forceCheck ? forceCheck.checked : false;
 
             btn.disabled = true;
             btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Installing...`;
@@ -214,8 +228,10 @@
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
-                    }
+                    },
+                    body: JSON.stringify({ force: force })
                 });
 
                 if (!response.ok) {
