@@ -22,53 +22,38 @@ No subscription. Upload to your server, run the web installer, and start managin
 
 ---
 
+## Desktop Previews
+
+#### 1. Dashboard & Financial Analytics
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_1.png" width="100%" alt="Dashboard Analytics" />
+
+#### 2. Transaction Ledger
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_2.png" width="100%" alt="Transaction Ledger" />
+
+#### 3. Accounts & Transfers
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_3.png" width="100%" alt="Accounts and Transfers" />
+
+#### 4. Lending & Borrowing Ledger
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_4.png" width="100%" alt="Lending and Borrowing" />
+
+#### 5. Administrative Settings & Updater
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_5.png" width="100%" alt="System Updater" />
+
+#### 6. Interactive Multi-Currency & Invoicing
+<img src="https://raw.githubusercontent.com/Mohit-Hasan/expense-buddy/refs/heads/main/public/preview/screenshot_6.png" width="100%" alt="Multi-Currency and Invoicing" />
+
+---
+
 ## Features
 
-### Dashboard & transactions
-- Record **income** and **expense** with date, category, payment method, notes, and references
-- Live dashboard totals: income, expense, net balance, and cash on hand
-- Search and filter your ledger
-
-### Accounts & transfers
-- Create **bank, cash, or wallet** accounts in different currencies
-- **Transfer** money between accounts — balances update automatically
-- Optional policy to **block negative balances**
-
-### Categories & reports
-- Separate **income** and **expense** categories (archive/restore supported)
-- **Income vs expense** report
-- **Categorized** breakdown and **detailed analytics** with charts
-
-### Invoices
-- Generate **PDF invoices** from any transaction
-- Share a **public link** so clients can view or download
-
-### Multi-currency
-- Choose a **base currency** at install time
-- Add currencies with exchange rates
-- Transactions stay in the account’s native currency; reports convert to base
-
-### Lending
-- Track people and companies you lend to or borrow from
-- Lending overview and per-contact ledger
-
-### Team & administration
-- **Users, roles, and per-menu permissions**
-- **System settings**: app name, logo, base currency, ledger rules
-- **Email settings**: SMTP or PHP Mail — used for password reset emails
-- **Database backup** download (MySQL)
-- **Currency management**
-
-### Security & sign-in
-- **Forgot password** flow with email reset link
-- **Two-factor authentication (2FA)** — any user can enable TOTP with QR code under **Account → Security**
-- **30-day sessions** — “Keep me signed in” on the login page
-- Branded login with optional uploaded logo, or built-in wallet icon fallback
-
-### Branding & PWA
-- Upload a **logo** in admin — used in sidebar, favicon, and mobile home-screen icon
-- If no logo is set, a **built-in wallet SVG** is used everywhere (no broken/black placeholders)
-- **Install as app** prompt on login (Chrome / mobile) — works best over HTTPS
+- **Dashboard & Ledger**: Record income and expense (date, category, payment method, notes). Search, filter, and view net balances live.
+- **Accounts & Transfers**: Manage Bank, Cash, or Wallet accounts in multiple currencies. Log transfers with optional fee/loss rate calculations and optional negative balance blocking.
+- **Categories, Reports & Trend Curves**: Separate income and expense categories. Generate detailed analytics, categorized breakdowns, income vs. expense cash flow, balance trends, and custom-period net asset performance curves via dynamic charts.
+- **PDF Invoices**: Generate custom PDF invoices for any transaction with shareable public links.
+- **Multi-Currency Support**: Set a base currency and define exchange rates. Log native currency transactions while automatically converting analytics.
+- **Lending & Debts**: Track lending and borrowing balances and payback ledgers grouped by contact.
+- **Administration & Updater**: Manage users/permissions, SMTP settings, database backups, and run self-hosted updates directly from GitHub with a live terminal console.
+- **Security & PWA**: Protect accounts with Google 2FA (TOTP) and 30-day sessions. Install the application directly on mobile/Chrome as an offline PWA.
 
 ---
 
@@ -76,7 +61,7 @@ No subscription. Upload to your server, run the web installer, and start managin
 
 | Requirement | Notes |
 |-------------|--------|
-| **PHP 8.3+** | With PDO, OpenSSL, Mbstring, Tokenizer, XML, Fileinfo, GD |
+| **PHP 8.3+** | With PDO, OpenSSL, Mbstring, Tokenizer, XML, Fileinfo, GD, Zip |
 | **MySQL / MariaDB** | Recommended for live hosting |
 | **SQLite** | Fine for local testing |
 | **Web server** | Apache (mod_rewrite) or Nginx — document root must be `/public` |
@@ -177,17 +162,6 @@ Optional demo data:
 SEED_DEMO_DATA=true
 ```
 
-### Option C — From source (no vendor yet)
-
-```bash
-composer install
-npm install && npm run build
-cp .env.example .env
-php artisan key:generate
-```
-
-Then use **Option A** (`/install/`) or **Option B** (`db:seed`).
-
 ---
 
 ## First-time setup inside the app
@@ -198,7 +172,7 @@ Then use **Option A** (`/install/`) or **Option B** (`db:seed`).
 | SMTP / PHP Mail for emails | **Administration → Settings → Email Configuration** |
 | Add currencies | **Administration → Currencies** |
 | Users & roles | **Administration → Users / Roles** |
-| Enable 2FA | **Account → Security** (sidebar) |
+| Enable 2FA | **Account → Security** (navbar) |
 | Reset password | **Forgot password?** on login page |
 
 ### Email (password reset)
@@ -318,6 +292,23 @@ database/         ← Migrations & seeders
 **Admin is not in `DatabaseSeeder` by default** — it is created by the web installer or `SEED_DEV_ADMIN=true php artisan db:seed`.
 
 Demo sample data only: `php artisan db:seed --class=DemoDataSeeder` *(requires an existing install with admin + currency)*.
+
+---
+
+## Live Demo Access
+
+You can test ExpenseBuddy online using the credentials below:
+
+> **Note**
+> - The demo database is **automatically reset every hour**.
+> - Any data you create, edit, or delete will be removed during the next scheduled reset.
+> - Feel free to explore all features without worrying about affecting other users permanently.
+
+* **Demo URL**: [https://buddy.mohithasan.com](https://buddy.mohithasan.com)
+
+| Account Role | Email Address | Password |
+|:---|:---|:---|
+| **Administrator** | `admin@expensebuddy.test` | `password` |
 
 ---
 
