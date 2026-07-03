@@ -305,12 +305,12 @@
             } else if (step === 'MAINTENANCE' || step === 'CACHE_CLEAR') {
                 cssClass = 'text-amber-400';
             } else if (step === 'SUCCESS') {
-                cssClass = 'text-emerald-500 font-bold';
-                
-                // On success, trigger page reload after delay
-                setTimeout(() => {
-                    window.location.reload();
-                }, 4000);
+                const logRow = document.createElement('div');
+                logRow.className = 'text-emerald-500 font-bold';
+                logRow.innerHTML = `[${step}] ${message} <a href="javascript:void(0)" onclick="window.location.reload()" class="underline text-sky-400 hover:text-sky-300 ml-2">Reload Page</a>`;
+                consoleBox.appendChild(logRow);
+                consoleBox.scrollTop = consoleBox.scrollHeight;
+                return;
             }
 
             const logRow = document.createElement('div');
