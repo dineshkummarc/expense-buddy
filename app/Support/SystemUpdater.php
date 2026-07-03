@@ -349,6 +349,45 @@ class SystemUpdater
     }
 
     /**
+     * Resolve the correct PHP CLI binary path matching the web server PHP version.
+     */
+    public static function getPhpBinaryPath(): string
+    {
+        $phpBinary = PHP_BINARY;
+
+        // 1. If running under LiteSpeed CGI (lsphp), replace lsphp with php
+        if (str_contains($phpBinary, '/lsphp')) {
+            $candidate = str_replace('/lsphp', '/php', $phpBinary);
+            if (@is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        // 2. If it points to php-fpm or php-cgi, try to find standard php CLI in the same directory
+        if (preg_match('/php-fpm|php-cgi/i', $phpBinary)) {
+            if (preg_match('/(php-fpm|php-cgi)(\d+\.\d+|\d+)/i', basename($phpBinary), $matches)) {
+                $suffix = $matches[2];
+                $dir = dirname($phpBinary);
+                if (@is_executable($dir . '/php' . $suffix)) {
+                    return $dir . '/php' . $suffix;
+                }
+            }
+            $candidate = dirname($phpBinary) . '/php';
+            if (@is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+
+        // 3. Fallback to standard Symfony finder
+        $finder = new \Symfony\Component\Process\PhpExecutableFinder();
+        $found = $finder->find(false);
+        if ($found) {
+            return $found;
+        }
+
+        return $phpBinary;
+    }
+
     /**
      * Check if ZipArchive PHP extension is loaded.
      */
@@ -367,7 +406,7 @@ class SystemUpdater
     public static function runUpdateStreamed(callable $logOutput, bool $force = false): bool
     {
         $success = true;
-        $phpBinary = (new \Symfony\Component\Process\PhpExecutableFinder())->find() ?: PHP_BINARY;
+        $phpBinary = self::getPhpBinaryPath();
 
         try {
             // 1. Enter maintenance mode
