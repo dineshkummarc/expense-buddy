@@ -41,10 +41,42 @@ class SystemUpdater
                 return false;
             }
 
-            $process = new Process(['git', 'status', '--porcelain'], base_path());
+            // Exclude untracked files from dirty repo calculation
+            $process = new Process(['git', 'status', '--porcelain', '--untracked-files=no'], base_path());
             $process->run();
 
-            return !empty(trim($process->getOutput()));
+            if (!$process->isSuccessful()) {
+                return false;
+            }
+
+            $output = trim($process->getOutput());
+            if (empty($output)) {
+                return false;
+            }
+
+            $lines = explode("\n", $output);
+            foreach ($lines as $line) {
+                if (empty(trim($line))) {
+                    continue;
+                }
+
+                // git status --porcelain outputs path at index 3 onwards
+                $filePath = trim(substr($line, 2));
+
+                // Skip public/install/* deletions and public/storage changes
+                if (str_starts_with($filePath, 'public/install/')) {
+                    continue;
+                }
+
+                if ($filePath === 'public/storage') {
+                    continue;
+                }
+
+                // Any other tracked file modification means dirty repository
+                return true;
+            }
+
+            return false;
         } catch (\Throwable $e) {
             return false;
         }
@@ -329,9 +361,10 @@ class SystemUpdater
      * Perform the full update process, reporting progress via callback.
      *
      * @param callable(string, string): void $logOutput
+     * @param bool $force
      * @return bool
      */
-    public static function runUpdateStreamed(callable $logOutput): bool
+    public static function runUpdateStreamed(callable $logOutput, bool $force = false): bool
     {
         $success = true;
 
@@ -341,6 +374,20 @@ class SystemUpdater
             $down = new Process(['php', 'artisan', 'down', '--refresh=15'], base_path());
             $down->run();
             $logOutput('MAINTENANCE', $down->getOutput() ?: $down->getErrorOutput());
+
+            // If force is enabled, discard local changes before checking git or zip
+            if ($force) {
+                if (self::isGitInstalled() && self::isGitRepo()) {
+                    $logOutput('FORCE_CLEAN', 'Force clean enabled: Discarding local modifications...');
+                    $reset = new Process(['git', 'reset', '--hard', 'HEAD'], base_path());
+                    $reset->run();
+                    $logOutput('FORCE_CLEAN', $reset->getOutput() ?: $reset->getErrorOutput());
+
+                    $clean = new Process(['git', 'clean', '-fd'], base_path());
+                    $clean->run();
+                    $logOutput('FORCE_CLEAN', $clean->getOutput() ?: $clean->getErrorOutput());
+                }
+            }
 
             // Get Remote Commit Details to write into version.json later
             $remote = self::getRemoteLatestCommit();
