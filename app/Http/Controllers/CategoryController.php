@@ -15,11 +15,21 @@ class CategoryController extends Controller
 {
     public function index(Request $request): View
     {
+        $settings = \App\Models\SystemSetting::first();
+        $hideTransferFees = $settings && !$settings->transfer_fees_enabled;
+
         $query = TransactionCategory::query()
             ->withCount('transactions')
             ->orderBy('status')
             ->orderBy('type')
             ->orderBy('name');
+
+        if ($hideTransferFees) {
+            $query->where(function ($q) {
+                $q->whereNull('key')
+                  ->orWhere('key', '!=', \App\Enums\SystemCategoryKey::TRANSFER_FEES->value);
+            });
+        }
 
         if ($request->filled('type') && in_array($request->input('type'), ['income', 'expense'], true)) {
             $query->where('type', $request->input('type'));
@@ -33,9 +43,9 @@ class CategoryController extends Controller
             'categories' => $query->get(),
             'filters' => $request->only(['type', 'status']),
             'stats' => [
-                'total' => TransactionCategory::query()->count(),
-                'active' => TransactionCategory::query()->where('status', 'active')->count(),
-                'archived' => TransactionCategory::query()->where('status', 'inactive')->count(),
+                'total' => TransactionCategory::query()->when($hideTransferFees, fn($q) => $q->where(fn($sq) => $sq->whereNull('key')->orWhere('key', '!=', \App\Enums\SystemCategoryKey::TRANSFER_FEES->value)))->count(),
+                'active' => TransactionCategory::query()->where('status', 'active')->when($hideTransferFees, fn($q) => $q->where(fn($sq) => $sq->whereNull('key')->orWhere('key', '!=', \App\Enums\SystemCategoryKey::TRANSFER_FEES->value)))->count(),
+                'archived' => TransactionCategory::query()->where('status', 'inactive')->when($hideTransferFees, fn($q) => $q->where(fn($sq) => $sq->whereNull('key')->orWhere('key', '!=', \App\Enums\SystemCategoryKey::TRANSFER_FEES->value)))->count(),
             ],
         ]);
     }
@@ -60,6 +70,10 @@ class CategoryController extends Controller
             return back()->withErrors(['form' => 'Category not found.']);
         }
 
+        if ($category->is_system) {
+            return back()->withErrors(['form' => 'System categories cannot be modified.']);
+        }
+
         $category->update($request->validated());
 
         $message = $category->status === 'inactive'
@@ -77,6 +91,10 @@ class CategoryController extends Controller
 
         if ($category === null) {
             return back()->withErrors(['form' => 'Category not found.']);
+        }
+
+        if ($category->is_system) {
+            return back()->withErrors(['form' => 'System categories cannot be archived.']);
         }
 
         $category->update(['status' => 'inactive']);

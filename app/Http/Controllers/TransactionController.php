@@ -163,7 +163,7 @@ class TransactionController extends Controller
         return [
             'accounts' => $this->accountRepository->active(),
             'currencies' => Currency::query()->orderBy('name')->get(),
-            'categories' => TransactionCategory::query()->where('status', 'active')->orderBy('name')->get(),
+            'categories' => TransactionCategory::active()->orderBy('name')->get(),
             'paymentMethods' => PaymentMethod::query()->where('status', 'active')->orderBy('name')->get(),
             'contacts' => $this->contactRepository->allActive(),
         ];

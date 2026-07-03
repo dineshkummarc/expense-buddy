@@ -137,6 +137,10 @@ class SystemSettingService
             $settings->error_tracking_enabled = (bool) $data['error_tracking_enabled'];
         }
 
+        if (array_key_exists('transfer_fees_enabled', $data)) {
+            $settings->transfer_fees_enabled = (bool) $data['transfer_fees_enabled'];
+        }
+
         $settings->save();
 
         $this->applyRuntimeConfig($settings);

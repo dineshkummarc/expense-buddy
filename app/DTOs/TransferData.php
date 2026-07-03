@@ -20,6 +20,8 @@ final readonly class TransferData
         public ?string $reference = null,
         public ?string $description = null,
         public ?string $attachment = null,
+        public string $feeOption = 'no_fees',
+        public ?string $destinationAmount = null,
     ) {
     }
 
@@ -39,6 +41,8 @@ final readonly class TransferData
             reference: isset($data['reference']) ? (string) $data['reference'] : null,
             description: isset($data['description']) ? (string) $data['description'] : null,
             attachment: isset($data['attachment']) ? (string) $data['attachment'] : null,
+            feeOption: isset($data['fee_option']) ? (string) $data['fee_option'] : 'no_fees',
+            destinationAmount: isset($data['destination_amount']) && $data['destination_amount'] !== '' ? self::normalizeAmount((string) $data['destination_amount']) : null,
         );
     }
 

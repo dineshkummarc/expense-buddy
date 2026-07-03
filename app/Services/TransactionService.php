@@ -6,11 +6,15 @@ namespace App\Services;
 
 use App\DTOs\TransactionData;
 use App\DTOs\TransferData;
+use App\Enums\SystemCategoryKey;
 use App\Exceptions\InsufficientBalanceException;
+use App\Models\Currency;
 use App\Models\Transaction;
+use App\Models\TransactionCategory;
 use App\Repositories\Contracts\AccountRepositoryInterface;
 use App\Repositories\Contracts\ContactRepositoryInterface;
 use App\Repositories\Contracts\TransactionRepositoryInterface;
+use App\Support\MoneyFormatter;
 use App\Support\TransactionType;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -114,9 +118,46 @@ class TransactionService
 
         return DB::transaction(function () use ($dto): array {
             $this->assertPositiveAmount($dto->amount);
-            $this->assertSufficientBalance($dto->sourceAccountId, $dto->amount);
             $this->assertAccountExists($dto->sourceAccountId);
             $this->assertAccountExists($dto->destinationAccountId);
+
+            $sourceAccount = $this->accountRepository->find($dto->sourceAccountId);
+            $destAccount = $this->accountRepository->find($dto->destinationAccountId);
+
+            if ($sourceAccount === null || $destAccount === null) {
+                throw new InvalidArgumentException('Source or destination account not found.');
+            }
+
+            $feeAmount = '0.0000';
+            $netAmount = $dto->amount;
+
+            if ($dto->feeOption === 'charge_fee' && $dto->destinationAmount !== null) {
+                $sourceCurrencyId = $sourceAccount->currency_id;
+                $destCurrencyId = $destAccount->currency_id;
+
+                if ($sourceCurrencyId === $destCurrencyId) {
+                    $feeAmount = bcsub($dto->amount, $dto->destinationAmount, 4);
+                } else {
+                    $destCurrency = Currency::find($destCurrencyId);
+                    if ($destCurrency === null) {
+                        throw new InvalidArgumentException('Destination account currency not found.');
+                    }
+                    $destRate = (string) $destCurrency->exchange_rate;
+
+                    $baseOfEntered = bcdiv($dto->destinationAmount, $destRate, 4);
+                    $transferEquivalentOfEntered = bcmul($baseOfEntered, $dto->rateAtTransaction, 4);
+                    $feeAmount = bcsub($dto->amount, $transferEquivalentOfEntered, 4);
+                }
+
+                if (bccomp($feeAmount, '0', 4) < 0) {
+                    throw new InvalidArgumentException('Destination amount cannot exceed the expected converted transfer amount.');
+                }
+
+                $netAmount = bcsub($dto->amount, $feeAmount, 4);
+            }
+
+            // Assert sufficient balance for total deduction ($dto->amount) on the source account
+            $this->assertSufficientBalance($dto->sourceAccountId, $dto->amount);
 
             $expenseTransaction = $this->transactionRepository->create([
                 'account_id' => $dto->sourceAccountId,
@@ -124,7 +165,7 @@ class TransactionService
                 'category_id' => null,
                 'payment_method_id' => $dto->paymentMethodId,
                 'currency_id' => $dto->currencyId,
-                'amount' => $dto->amount,
+                'amount' => $netAmount,
                 'rate_at_transaction' => $dto->rateAtTransaction,
                 'contact_id' => null,
                 'transaction_date' => $dto->transactionDate,
@@ -139,7 +180,7 @@ class TransactionService
                 'category_id' => null,
                 'payment_method_id' => $dto->paymentMethodId,
                 'currency_id' => $dto->currencyId,
-                'amount' => $dto->amount,
+                'amount' => $netAmount,
                 'rate_at_transaction' => $dto->rateAtTransaction,
                 'contact_id' => null,
                 'transaction_date' => $dto->transactionDate,
@@ -153,8 +194,43 @@ class TransactionService
                 $incomeTransaction->id
             );
 
+            if (bccomp($feeAmount, '0', 4) > 0) {
+                $feeCategory = TransactionCategory::query()->where('key', SystemCategoryKey::TRANSFER_FEES->value)->first();
+                if ($feeCategory === null) {
+                    throw new InvalidArgumentException('System transfer fee category not found.');
+                }
+
+                $this->transactionRepository->create([
+                    'account_id' => $dto->sourceAccountId,
+                    'type' => 'expense',
+                    'category_id' => $feeCategory->id,
+                    'payment_method_id' => $dto->paymentMethodId,
+                    'currency_id' => $dto->currencyId,
+                    'amount' => $feeAmount,
+                    'rate_at_transaction' => $dto->rateAtTransaction,
+                    'contact_id' => null,
+                    'transaction_date' => $dto->transactionDate,
+                    'reference' => $dto->reference,
+                    'description' => "Transfer fee: {$sourceAccount->account_title} to {$destAccount->account_title}",
+                    'attachment' => $dto->attachment,
+                    'transfer_reference_id' => $expenseTransaction->id,
+                ]);
+            }
+
+            // Decrement source by the full amount (net transfer + fee)
             $this->accountRepository->updateBalance($dto->sourceAccountId, $dto->amount, 'decrement');
-            $this->accountRepository->updateBalance($dto->destinationAccountId, $dto->amount, 'increment');
+
+            // Increment destination by net transfer converted to destination currency
+            $destCurrencyId = $destAccount->currency_id;
+            if ($destCurrencyId === $dto->currencyId) {
+                $destAmount = $netAmount;
+            } else {
+                $baseAmount = MoneyFormatter::convertToBase($netAmount, $dto->rateAtTransaction);
+                $destCurrency = Currency::find($destCurrencyId);
+                $destRate = (string) ($destCurrency?->exchange_rate ?? '1.0000');
+                $destAmount = bcmul($baseAmount, $destRate, 4);
+            }
+            $this->accountRepository->updateBalance($dto->destinationAccountId, $destAmount, 'increment');
 
             $expense = $this->transactionRepository->findWithRelations($expenseTransaction->id);
             $income = $this->transactionRepository->findWithRelations($incomeTransaction->id);
@@ -246,6 +322,18 @@ class TransactionService
             throw new RuntimeException("Paired transfer transaction [{$pairedId}] not found.");
         }
 
+        // Find and delete the associated fee transaction if exists.
+        // A fee transaction is an expense transaction where transfer_reference_id is $transaction->id or $paired->id.
+        $feeTransaction = Transaction::query()
+            ->where('type', 'expense')
+            ->whereIn('transfer_reference_id', [$transaction->id, $paired->id])
+            ->first();
+
+        if ($feeTransaction !== null) {
+            $this->reverseTransactionEffects($feeTransaction);
+            $this->transactionRepository->delete($feeTransaction->id);
+        }
+
         $this->reverseTransactionEffects($transaction);
         $this->reverseTransactionEffects($paired);
 
@@ -306,12 +394,27 @@ class TransactionService
         }
 
         if ($transaction->id < (int) $transaction->transfer_reference_id) {
+            // Source side: increment back by original transfer amount.
+            // If a fee existed, it was reversed separately in deleteTransferPair.
             $this->accountRepository->updateBalance($accountId, $amount, 'increment');
 
             return;
         }
 
-        $this->accountRepository->updateBalance($accountId, $amount, 'decrement');
+        // Destination side: decrement by converted amount.
+        $destAccount = $this->accountRepository->find($accountId);
+        $destCurrencyId = $destAccount?->currency_id;
+
+        if ($destCurrencyId === $transaction->currency_id) {
+            $destAmount = $amount;
+        } else {
+            $baseAmount = MoneyFormatter::convertToBase($amount, (string) $transaction->rate_at_transaction);
+            $destCurrency = Currency::find($destCurrencyId);
+            $destRate = (string) ($destCurrency?->exchange_rate ?? '1.0000');
+            $destAmount = bcmul($baseAmount, $destRate, 4);
+        }
+
+        $this->accountRepository->updateBalance($accountId, $destAmount, 'decrement');
     }
 
     private function applyTransactionEffects(TransactionData $dto): void

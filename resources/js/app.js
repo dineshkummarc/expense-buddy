@@ -126,6 +126,7 @@ function bindAccountCurrency(accountSelectId, currencySelectId, rateInputId) {
 
         if (currencyId) {
             currencySelect.value = currencyId;
+            currencySelect.dispatchEvent(new Event('change', { bubbles: true }));
             const rate = currencySelect.selectedOptions[0]?.dataset.rate;
             if (rate) {
                 rateInput.value = rate;

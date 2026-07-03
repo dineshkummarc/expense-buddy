@@ -33,6 +33,7 @@ class SystemSetting extends Model
         'backup_last_run_at',
         'backup_last_success_at',
         'error_tracking_enabled',
+        'transfer_fees_enabled',
     ];
 
     /**
@@ -46,6 +47,7 @@ class SystemSetting extends Model
         'backup_last_run_at' => 'datetime',
         'backup_last_success_at' => 'datetime',
         'error_tracking_enabled' => 'boolean',
+        'transfer_fees_enabled' => 'boolean',
     ];
 
     public function defaultCurrency(): BelongsTo

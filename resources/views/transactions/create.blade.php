@@ -23,7 +23,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <label class="label">Type</label>
-                        <select name="type" id="txn-type" class="input" data-search-select="off" required>
+                        <select name="type" id="txn-type" class="input" data-search-select required>
                             <option value="income" @selected(old('type') === 'income')>Income</option>
                             <option value="expense" @selected(old('type', 'expense') === 'expense')>Expense</option>
                             <optgroup label="Lending">

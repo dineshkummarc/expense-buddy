@@ -16,6 +16,15 @@ class TransactionCategory extends Model
         'name',
         'type',
         'status',
+        'is_system',
+        'key',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'is_system' => 'boolean',
     ];
 
     public function transactions(): HasMany
@@ -28,6 +37,20 @@ class TransactionCategory extends Model
      */
     public function scopeActive($query)
     {
-        return $query->where('status', 'active');
+        $query->where('status', 'active');
+
+        try {
+            $settings = \App\Models\SystemSetting::first();
+            if ($settings && !$settings->transfer_fees_enabled) {
+                $query->where(function ($q) {
+                    $q->whereNull('key')
+                      ->orWhere('key', '!=', \App\Enums\SystemCategoryKey::TRANSFER_FEES->value);
+                });
+            }
+        } catch (\Throwable $e) {
+            // Safe fallback
+        }
+
+        return $query;
     }
 }
