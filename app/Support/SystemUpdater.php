@@ -367,11 +367,12 @@ class SystemUpdater
     public static function runUpdateStreamed(callable $logOutput, bool $force = false): bool
     {
         $success = true;
+        $phpBinary = (new \Symfony\Component\Process\PhpExecutableFinder())->find() ?: PHP_BINARY;
 
         try {
             // 1. Enter maintenance mode
             $logOutput('MAINTENANCE', 'Entering maintenance mode...');
-            $down = new Process(['php', 'artisan', 'down', '--refresh=15'], base_path());
+            $down = new Process([$phpBinary, 'artisan', 'down', '--refresh=15'], base_path());
             $down->run();
             $logOutput('MAINTENANCE', $down->getOutput() ?: $down->getErrorOutput());
 
@@ -420,7 +421,7 @@ class SystemUpdater
             if ($success) {
                 // 3. Database Migrations
                 $logOutput('MIGRATION', 'Running database migrations...');
-                $migrate = new Process(['php', 'artisan', 'migrate', '--force'], base_path());
+                $migrate = new Process([$phpBinary, 'artisan', 'migrate', '--force'], base_path());
                 $migrate->run();
                 $logOutput('MIGRATION', $migrate->getOutput() ?: $migrate->getErrorOutput());
 
@@ -433,7 +434,7 @@ class SystemUpdater
             if ($success) {
                 // 4. Cache Clear
                 $logOutput('CACHE_CLEAR', 'Clearing application optimizations and caches...');
-                $clear = new Process(['php', 'artisan', 'optimize:clear'], base_path());
+                $clear = new Process([$phpBinary, 'artisan', 'optimize:clear'], base_path());
                 $clear->run();
                 $logOutput('CACHE_CLEAR', $clear->getOutput() ?: $clear->getErrorOutput());
             }
@@ -444,7 +445,7 @@ class SystemUpdater
         } finally {
             // 5. Exit maintenance mode
             $logOutput('MAINTENANCE', 'Bringing application back online...');
-            $up = new Process(['php', 'artisan', 'up'], base_path());
+            $up = new Process([$phpBinary, 'artisan', 'up'], base_path());
             $up->run();
             $logOutput('MAINTENANCE', $up->getOutput() ?: $up->getErrorOutput());
         }
