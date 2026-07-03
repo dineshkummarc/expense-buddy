@@ -92,7 +92,14 @@
                                         <span class="mx-1 text-slate-400">→</span>
                                         <span class="font-medium">{{ $transaction->transferReference?->account?->account_title ?? '—' }}</span>
                                     </div>
-                                    <x-currency-badge :currency="$transaction->currency" class="mt-1" />
+                                    <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                        <x-currency-badge :currency="$transaction->currency" />
+                                        @if ($feeTxn = $transaction->linkedTransfers->firstWhere('type', 'expense'))
+                                            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-rose-50 text-rose-600 border border-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/30">
+                                                Fee: {{ MoneyFormatter::format((string) $feeTxn->amount, $feeTxn->currency) }}
+                                            </span>
+                                        @endif
+                                    </div>
                                 @else
                                     <div>{{ $transaction->account?->account_title }}</div>
                                     <x-currency-badge :currency="$transaction->currency" class="mt-1" />
@@ -114,19 +121,17 @@
                                 </span>
                             </td>
                             <td class="td">
-                                @if ($transaction->type !== 'transfer')
-                                    <div class="flex flex-wrap gap-2">
-                                        <a href="{{ route('transactions.invoice.show', $transaction->id) }}" class="text-sm font-medium text-brand-600 hover:underline">Invoice</a>
-                                        <form id="delete-txn-{{ $transaction->id }}" method="POST" action="{{ route('transactions.destroy', $transaction->id) }}" class="inline">
-                                            @csrf
-                                            @method('DELETE')
-                                        </form>
-                                        <button type="button" data-confirm="Delete this transaction?" form="delete-txn-{{ $transaction->id }}" class="text-sm font-medium text-rose-600 hover:underline">Delete</button>
-                                    </div>
-                                @else
-                                    <span class="text-xs text-slate-400">Fund transfer</span>
-                                @endif
-                            </td>
+                                 <div class="flex flex-wrap gap-2">
+                                     @if ($transaction->type !== 'transfer')
+                                         <a href="{{ route('transactions.invoice.show', $transaction->id) }}" class="text-sm font-medium text-brand-600 hover:underline">Invoice</a>
+                                     @endif
+                                     <form id="delete-txn-{{ $transaction->id }}" method="POST" action="{{ route('transactions.destroy', $transaction->id) }}" class="inline">
+                                         @csrf
+                                         @method('DELETE')
+                                     </form>
+                                     <button type="button" data-confirm="Delete this transaction?" form="delete-txn-{{ $transaction->id }}" class="text-sm font-medium text-rose-600 hover:underline">Delete</button>
+                                 </div>
+                             </td>
                         </tr>
                     @empty
                         <tr>

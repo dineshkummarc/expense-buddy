@@ -19,6 +19,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             $this->merge([
                 'allow_negative_balances' => $this->boolean('allow_negative_balances'),
                 'error_tracking_enabled' => $this->boolean('error_tracking_enabled'),
+                'transfer_fees_enabled' => $this->boolean('transfer_fees_enabled'),
             ]);
         }
     }
@@ -49,6 +50,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'timezone' => ['required', 'string', 'timezone:all'],
             'allow_negative_balances' => ['sometimes', 'boolean'],
             'error_tracking_enabled' => ['sometimes', 'boolean'],
+            'transfer_fees_enabled' => ['sometimes', 'boolean'],
             'system_logo' => ['nullable', 'image', 'max:2048'],
         ];
     }

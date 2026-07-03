@@ -66,6 +66,11 @@
                 </label>
 
                 <label class="flex items-center gap-2 text-sm">
+                    <input type="checkbox" name="transfer_fees_enabled" value="1" @checked(old('transfer_fees_enabled', $settings->transfer_fees_enabled)) class="rounded border-slate-300 text-brand-600">
+                    Enable transfer fees / loss management
+                </label>
+
+                <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="error_tracking_enabled" value="1" @checked(old('error_tracking_enabled', $settings->error_tracking_enabled)) class="rounded border-slate-300 text-brand-600">
                     Enable error route tracking
                 </label>

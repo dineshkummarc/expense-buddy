@@ -116,6 +116,8 @@ Route::middleware(['auth', 'menu.permission'])->group(function (): void {
         });
         Route::get('/settings', [AdminController::class, 'settings'])->name('settings');
         Route::put('/settings', [AdminController::class, 'updateSettings'])->name('settings.update');
+        Route::get('/updater', [\App\Http\Controllers\UpdaterController::class, 'index'])->name('updater');
+        Route::post('/updater/run', [\App\Http\Controllers\UpdaterController::class, 'update'])->name('updater.run');
         Route::get('/error-insights', [AdminController::class, 'errorInsights'])->name('error-insights');
         Route::post('/error-insights/clear', [AdminController::class, 'clearErrorTracking'])->name('error-insights.clear');
         Route::get('/currencies', [AdminController::class, 'currencies'])->name('currencies');

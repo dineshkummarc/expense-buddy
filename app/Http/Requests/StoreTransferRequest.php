@@ -29,6 +29,14 @@ class StoreTransferRequest extends FormRequest
             'reference' => ['nullable', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'attachment' => ['nullable', 'string', 'max:255'],
+            'fee_option' => ['required', 'string', 'in:no_fees,charge_fee'],
+            'destination_amount' => [
+                'required_if:fee_option,charge_fee',
+                'nullable',
+                'numeric',
+                'gt:0',
+                'regex:/^\d+(\.\d{1,4})?$/',
+            ],
         ];
     }
 }
