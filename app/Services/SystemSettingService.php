@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Enums\AmountGrouping;
 use App\Models\Currency;
 use App\Models\SystemSetting;
 use App\Support\Brand;
+use App\Support\MoneyFormatter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -68,6 +70,10 @@ class SystemSettingService
 
         if (isset($data['timezone'])) {
             $settings->timezone = (string) $data['timezone'];
+        }
+
+        if (isset($data['amount_grouping'])) {
+            $settings->amount_grouping = AmountGrouping::tryFromMixed($data['amount_grouping']);
         }
 
         if (isset($data['mail_driver'])) {
@@ -143,6 +149,7 @@ class SystemSettingService
 
         $settings->save();
 
+        MoneyFormatter::resetGroupingCache();
         $this->applyRuntimeConfig($settings);
 
         return $settings->fresh(['defaultCurrency']);

@@ -159,16 +159,46 @@ class DashboardService
     }
 
     /**
-     * @return array{labels: list<string>, values: list<string>, currencies: list<string>}
+     * @return array{
+     *     labels: list<string>,
+     *     values: list<string>,
+     *     tooltips: list<array{native: string, base: string, is_base: bool}>
+     * }
      */
     private function accountBalanceChart(): array
     {
-        $accounts = Account::query()->with('currency')->orderByDesc('current_balance')->get();
+        $baseCurrency = MoneyFormatter::baseCurrency();
+        $baseCurrencyId = $baseCurrency?->id;
+
+        $rows = Account::query()
+            ->with('currency')
+            ->get()
+            ->map(function (Account $account) use ($baseCurrency, $baseCurrencyId): array {
+                $native = (string) $account->current_balance;
+                $base = MoneyFormatter::convertToBase(
+                    $native,
+                    (string) ($account->currency?->exchange_rate ?? '1.0000'),
+                );
+                $baseRounded = bcadd($base, '0', 2);
+                $isBase = $baseCurrencyId !== null && (int) $account->currency_id === (int) $baseCurrencyId;
+
+                return [
+                    'label' => $account->account_title,
+                    'value' => $baseRounded,
+                    'tooltip' => [
+                        'native' => MoneyFormatter::format($native, $account->currency),
+                        'base' => MoneyFormatter::format($baseRounded, $baseCurrency),
+                        'is_base' => $isBase,
+                    ],
+                ];
+            })
+            ->sortByDesc(fn (array $row): float => (float) $row['value'])
+            ->values();
 
         return [
-            'labels' => $accounts->pluck('account_title')->all(),
-            'values' => $accounts->map(fn (Account $a): string => (string) $a->current_balance)->all(),
-            'currencies' => $accounts->map(fn (Account $a): string => $a->currency?->code ?? '—')->all(),
+            'labels' => $rows->pluck('label')->all(),
+            'values' => $rows->pluck('value')->all(),
+            'tooltips' => $rows->pluck('tooltip')->all(),
         ];
     }
 }

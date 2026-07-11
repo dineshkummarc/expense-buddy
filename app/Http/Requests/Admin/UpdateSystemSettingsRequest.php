@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Admin;
 
+use App\Enums\AmountGrouping;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateSystemSettingsRequest extends FormRequest
 {
@@ -48,6 +50,7 @@ class UpdateSystemSettingsRequest extends FormRequest
             'system_name' => ['required', 'string', 'max:120'],
             'default_currency_id' => ['required', 'integer', 'exists:currencies,id'],
             'timezone' => ['required', 'string', 'timezone:all'],
+            'amount_grouping' => ['required', Rule::enum(AmountGrouping::class)],
             'allow_negative_balances' => ['sometimes', 'boolean'],
             'error_tracking_enabled' => ['sometimes', 'boolean'],
             'transfer_fees_enabled' => ['sometimes', 'boolean'],

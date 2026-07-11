@@ -15,7 +15,7 @@
         use App\Support\TransactionType;
     @endphp
 
-    <div class="rounded-2xl border border-brand-200/80 bg-brand-50/50 px-5 py-4 dark:border-brand-900/40 dark:bg-brand-950/30">
+    <div class="rounded-2xl border border-brand-200/80 bg-brand-50/50 px-5 py-4 dark:border-brand-900/40 dark:bg-brand-900/30">
         <div class="flex flex-wrap items-center justify-between gap-3">
             <div>
                 <div class="text-sm text-slate-500">{{ $contact->email ?? $contact->phone ?? 'No contact info' }}</div>
