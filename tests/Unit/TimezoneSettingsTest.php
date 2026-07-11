@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit;
 
+use App\Enums\AmountGrouping;
 use App\Models\SystemSetting;
 use App\Support\ExpenseBuddyTestHarness;
 use App\Support\TimezoneList;
@@ -33,11 +34,13 @@ class TimezoneSettingsTest extends TestCase
                 'system_name' => 'ExpenseBuddy',
                 'default_currency_id' => SystemSetting::query()->value('default_currency_id'),
                 'timezone' => 'Asia/Dhaka',
+                'amount_grouping' => 'asian',
             ])
             ->assertRedirect()
             ->assertSessionHas('success');
 
         $this->assertSame('Asia/Dhaka', SystemSetting::query()->value('timezone'));
         $this->assertSame('Asia/Dhaka', config('app.timezone'));
+        $this->assertSame(AmountGrouping::Asian, SystemSetting::query()->first()?->amount_grouping);
     }
 }

@@ -59,7 +59,7 @@
             </div>
         </x-panel>
 
-        <x-panel title="Account Balances" subtitle="Current balance by account">
+        <x-panel title="Account Balances" subtitle="Converted to base currency for fair comparison">
             <div class="h-80">
                 <canvas id="accountBalanceChart"></canvas>
             </div>
@@ -129,7 +129,35 @@
             labels: @json($summary['account_balances']['labels']),
             datasets: [{ label: 'Balance', data: @json($summary['account_balances']['values']), backgroundColor: colors.palette, borderRadius: 8 }],
         },
-        options: { ...window.LedgerCharts.baseChartOptions(), indexAxis: 'y' },
+        options: (() => {
+            const opts = window.LedgerCharts.baseChartOptions();
+            const tips = @json($summary['account_balances']['tooltips']);
+
+            return {
+                ...opts,
+                indexAxis: 'y',
+                plugins: {
+                    ...opts.plugins,
+                    tooltip: {
+                        callbacks: {
+                            label(ctx) {
+                                const tip = tips[ctx.dataIndex];
+
+                                if (! tip) {
+                                    return `Balance: ${ctx.formattedValue}`;
+                                }
+
+                                if (tip.is_base) {
+                                    return tip.native;
+                                }
+
+                                return [tip.native, `≈ ${tip.base}`];
+                            },
+                        },
+                    },
+                },
+            };
+        })(),
     });
 </x-chart-init>
 @endpush

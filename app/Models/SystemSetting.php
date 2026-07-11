@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\AmountGrouping;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -17,6 +18,7 @@ class SystemSetting extends Model
         'system_logo',
         'default_currency_id',
         'timezone',
+        'amount_grouping',
         'allow_negative_balances',
         'mail_driver',
         'mail_host',
@@ -40,6 +42,7 @@ class SystemSetting extends Model
      * @var array<string, string>
      */
     protected $casts = [
+        'amount_grouping' => AmountGrouping::class,
         'allow_negative_balances' => 'boolean',
         'mail_port' => 'integer',
         'backup_enabled' => 'boolean',

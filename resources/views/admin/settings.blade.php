@@ -60,6 +60,18 @@
                     <p class="mt-1 text-xs text-slate-500">Dates, reports, backups, and scheduled tasks use this timezone.</p>
                 </div>
 
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium">Amount Number Format</label>
+                    <select name="amount_grouping" class="input" data-search-select data-placeholder="Number format" data-search-placeholder="Search formats…" required>
+                        @foreach (\App\Enums\AmountGrouping::options() as $value => $label)
+                            <option value="{{ $value }}" @selected(old('amount_grouping', $settings->amount_grouping?->value ?? \App\Enums\AmountGrouping::Western->value) === $value)>
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
+                    <p class="mt-1 text-xs text-slate-500">Applies to amounts shown across the app.</p>
+                </div>
+
                 <label class="flex items-center gap-2 text-sm">
                     <input type="checkbox" name="allow_negative_balances" value="1" @checked(old('allow_negative_balances', $settings->allow_negative_balances)) class="rounded border-slate-300 text-brand-600">
                     Allow negative account balances
