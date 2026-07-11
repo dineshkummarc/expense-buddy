@@ -624,7 +624,6 @@ class SystemUpdater
             // Skip critical environment files to avoid data loss
             if ($file === '.env' || $file === 'database.sqlite') {
                 $logOutput('UPGRADE', "Skipping protected configuration/db file: {$file}");
-
                 continue;
             }
 
@@ -633,16 +632,29 @@ class SystemUpdater
                 continue;
             }
 
+            // If the source or destination is a symlink (like public/storage), skip it.
+            // Laravel can regenerate this link automatically if needed.
+            if (is_link($srcPath) || is_link($dstPath)) {
+                $logOutput('UPGRADE', "Skipping symlink reference: {$file}");
+                continue;
+            }
+
             if (is_dir($srcPath)) {
                 // If it is the storage folder, skip copying to prevent overwriting user uploads
                 if ($file === 'storage') {
                     $logOutput('UPGRADE', "Skipping user uploads storage directory: {$file}");
-
                     continue;
                 }
 
                 self::copyDirectory($srcPath, $dstPath, $logOutput);
             } else {
+                // If the target destination path is somehow currently a directory, 
+                // remove it recursively so copy() doesn't fail.
+                if (is_dir($dstPath)) {
+                    $logOutput('UPGRADE', "Removing unexpected directory at destination file path: {$file}");
+                    self::recursiveRmdir($dstPath);
+                }
+
                 copy($srcPath, $dstPath);
             }
         }
