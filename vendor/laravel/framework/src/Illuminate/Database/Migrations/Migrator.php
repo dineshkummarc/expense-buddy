@@ -27,7 +27,7 @@ class Migrator
     /**
      * The event dispatcher instance.
      *
-     * @var \Illuminate\Contracts\Events\Dispatcher
+     * @var \Illuminate\Contracts\Events\Dispatcher|null
      */
     protected $events;
 
@@ -62,7 +62,7 @@ class Migrator
     /**
      * The name of the default connection.
      *
-     * @var string
+     * @var string|null
      */
     protected $connection;
 
@@ -83,7 +83,7 @@ class Migrator
     /**
      * The output interface implementation.
      *
-     * @var \Symfony\Component\Console\Output\OutputInterface
+     * @var \Symfony\Component\Console\Output\OutputInterface|null
      */
     protected $output;
 
@@ -427,6 +427,7 @@ class Migrator
      *
      * @param  object  $migration
      * @param  string  $method
+     * @param  string|null  $name
      * @return void
      */
     protected function runMigration($migration, $method, $name = null)
@@ -512,7 +513,7 @@ class Migrator
         $previousConnection = $this->resolver->getDefaultConnection();
 
         try {
-            $this->resolver->setDefaultConnection($connection->getName());
+            $this->resolver->setDefaultConnection($connection->getNameWithReadWriteType());
 
             $migration->{$method}();
         } finally {
@@ -556,6 +557,19 @@ class Migrator
         }
 
         return new $class;
+    }
+
+    /**
+     * Determine if the migration at the given path should be skipped.
+     *
+     * @param  string  $path
+     * @return bool
+     */
+    public function shouldSkip($path)
+    {
+        $migration = $this->resolvePath($path);
+
+        return $migration instanceof Migration && ! $migration->shouldRun();
     }
 
     /**
@@ -645,7 +659,7 @@ class Migrator
     /**
      * Get the default connection name.
      *
-     * @return string
+     * @return string|null
      */
     public function getConnection()
     {
@@ -663,30 +677,48 @@ class Migrator
      */
     public function usingConnection($name, callable $callback)
     {
-        $previousConnection = $this->resolver->getDefaultConnection();
+        $previousConnection = $this->connection;
+        $previousDefaultConnection = $this->resolver->getDefaultConnection();
 
         $this->setConnection($name);
 
         try {
             return $callback();
         } finally {
-            $this->setConnection($previousConnection);
+            $this->repository->setSource($previousConnection);
+            $this->resolver->setDefaultConnection($previousDefaultConnection);
+
+            $this->connection = $previousConnection;
         }
     }
 
     /**
      * Set the default connection name.
      *
-     * @param  string  $name
+     * @param  string|null  $name
      * @return void
      */
     public function setConnection($name)
     {
-        if (! is_null($name)) {
-            $this->resolver->setDefaultConnection($name);
+        if (is_null($name)) {
+            $defaultName = $this->resolver->getDefaultConnection();
+            $directName = $this->directConnectionName($defaultName);
+
+            // Using "null" connection, default is "null", and no direct connection...
+            if ($directName === $defaultName) {
+                $this->repository->setSource(null);
+                $this->connection = null;
+
+                return;
+            }
+
+            $name = $directName;
+        } else {
+            $name = $this->directConnectionName($name);
         }
 
         $this->repository->setSource($name);
+        $this->resolver->setDefaultConnection($name);
 
         $this->connection = $name;
     }
@@ -694,7 +726,7 @@ class Migrator
     /**
      * Resolve the database connection instance.
      *
-     * @param  string  $connection
+     * @param  string|null  $connection
      * @return \Illuminate\Database\Connection
      */
     public function resolveConnection($connection)
@@ -706,8 +738,29 @@ class Migrator
                 $connection ?: $this->connection
             );
         } else {
-            return $this->resolver->connection($connection ?: $this->connection);
+            return $this->resolver->connection(
+                $this->directConnectionName($connection ?: $this->connection)
+            );
         }
+    }
+
+    /**
+     * Resolve the direct connection variant when one is configured.
+     *
+     * @param  string|null  $name
+     * @return string
+     */
+    protected function directConnectionName($name)
+    {
+        $name ??= $this->resolver->getDefaultConnection();
+
+        if (Str::endsWith($name, ['::read', '::write', '::direct'])) {
+            return $name;
+        }
+
+        return $this->resolver->connection($name)->hasDirectConnection()
+            ? $name.'::direct'
+            : $name;
     }
 
     /**

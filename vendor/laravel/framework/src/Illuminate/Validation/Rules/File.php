@@ -33,14 +33,14 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
     /**
      * The minimum size in kilobytes that the file can be.
      *
-     * @var null|int
+     * @var null|int|float
      */
     protected $minimumFileSize = null;
 
     /**
      * The maximum size in kilobytes that the file can be.
      *
-     * @var null|int
+     * @var null|int|float
      */
     protected $maximumFileSize = null;
 
@@ -92,7 +92,7 @@ class File implements Rule, DataAwareRule, ValidatorAwareRule
      * If no arguments are passed, the default file rule configuration will be returned.
      *
      * @param  static|callable|null  $callback
-     * @return static|void
+     * @return ($callback is null ? static : void)
      *
      * @throws \InvalidArgumentException
      */

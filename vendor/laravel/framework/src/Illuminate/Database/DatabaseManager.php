@@ -176,7 +176,7 @@ class DatabaseManager implements ConnectionResolverInterface
      */
     protected function parseConnectionName($name)
     {
-        return Str::endsWith($name, ['::read', '::write'])
+        return Str::endsWith($name, ['::read', '::write', '::direct'])
             ? explode('::', $name, 2)
             : [$name, null];
     }
@@ -290,6 +290,9 @@ class DatabaseManager implements ConnectionResolverInterface
             $connection->setPdo($connection->getReadPdo());
         } elseif ($type === 'write') {
             $connection->setReadPdo($connection->getPdo());
+        } elseif ($type === 'direct') {
+            $connection->setPdo($connection->getDirectPdo())
+                ->setReadPdo($connection->getDirectPdo());
         }
 
         return $connection;
@@ -378,7 +381,8 @@ class DatabaseManager implements ConnectionResolverInterface
 
         return $this->connections[$name]
             ->setPdo($fresh->getRawPdo())
-            ->setReadPdo($fresh->getRawReadPdo());
+            ->setReadPdo($fresh->getRawReadPdo())
+            ->setDirectPdo($fresh->getRawDirectPdo());
     }
 
     /**
@@ -394,12 +398,12 @@ class DatabaseManager implements ConnectionResolverInterface
     /**
      * Set the default connection name.
      *
-     * @param  string  $name
+     * @param  \UnitEnum|string  $name
      * @return void
      */
     public function setDefaultConnection($name)
     {
-        $this->app['config']['database.default'] = $name;
+        $this->app['config']['database.default'] = enum_value($name);
     }
 
     /**

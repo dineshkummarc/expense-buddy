@@ -46,6 +46,7 @@ use Illuminate\Foundation\Console\ConfigPublishCommand;
 use Illuminate\Foundation\Console\ConfigShowCommand;
 use Illuminate\Foundation\Console\ConsoleMakeCommand;
 use Illuminate\Foundation\Console\DevCommand;
+use Illuminate\Foundation\Console\DevListCommand;
 use Illuminate\Foundation\Console\DocsCommand;
 use Illuminate\Foundation\Console\DownCommand;
 use Illuminate\Foundation\Console\EnumMakeCommand;
@@ -113,6 +114,7 @@ use Illuminate\Queue\Console\TableCommand;
 use Illuminate\Queue\Console\WorkCommand as QueueWorkCommand;
 use Illuminate\Routing\Console\ControllerMakeCommand;
 use Illuminate\Routing\Console\MiddlewareMakeCommand;
+use Illuminate\Session\Console\SessionGarbageCollectCommand;
 use Illuminate\Session\Console\SessionTableCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -180,6 +182,7 @@ class ArtisanServiceProvider extends ServiceProvider implements DeferrableProvid
         'ScheduleInterrupt' => ScheduleInterruptCommand::class,
         'SchedulePause' => SchedulePauseCommand::class,
         'ScheduleResume' => ScheduleResumeCommand::class,
+        'SessionGarbageCollect' => SessionGarbageCollectCommand::class,
         'ShowModel' => ShowModelCommand::class,
         'StorageLink' => StorageLinkCommand::class,
         'StorageUnlink' => StorageUnlinkCommand::class,
@@ -207,6 +210,7 @@ class ArtisanServiceProvider extends ServiceProvider implements DeferrableProvid
         'ConsoleMake' => ConsoleMakeCommand::class,
         'ControllerMake' => ControllerMakeCommand::class,
         'Dev' => DevCommand::class,
+        'DevList' => DevListCommand::class,
         'Docs' => DocsCommand::class,
         'EnumMake' => EnumMakeCommand::class,
         'EventGenerate' => EventGenerateCommand::class,

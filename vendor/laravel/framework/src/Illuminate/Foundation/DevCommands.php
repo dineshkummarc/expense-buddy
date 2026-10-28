@@ -2,10 +2,15 @@
 
 namespace Illuminate\Foundation;
 
-use Exception;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\NodePackageManager;
+use Laravel\Pail\PailServiceProvider;
 use ReflectionClass;
 
+/**
+ * @phpstan-type DevCommandArray array{'name': string, 'command': string, 'source': array{'file': string, 'line': int, 'class'?: string, 'function'?: string}, 'color': string}
+ */
 class DevCommands
 {
     /**
@@ -16,7 +21,7 @@ class DevCommands
     protected static ?NodePackageManager $packageManager = null;
 
     /**
-     * Counter to keep track of how many colors have been assigned,.
+     * Counter to keep track of how many colors have been assigned.
      *
      * Used to ensure colors are reused only after all have been used at least once.
      *
@@ -46,6 +51,62 @@ class DevCommands
     protected static $except = [];
 
     /**
+     * The order in which named commands should run when running the "dev" command.
+     *
+     * @var array<int, string>
+     */
+    protected static $order = [];
+
+    /**
+     * The mode in which the "dev" command should run.
+     *
+     * @var DevCommandMode
+     */
+    protected static DevCommandMode $mode = DevCommandMode::TABS;
+
+    /**
+     * Whether to include timestamps in the output of the "dev" command.
+     *
+     * @var bool
+     */
+    protected static $withTimestamps = false;
+
+    /**
+     * Whether to automatically restart a "dev" command when it fails.
+     *
+     * @var bool
+     */
+    protected static $autoRestart = true;
+
+    /**
+     * Whether to exclude vendor commands.
+     *
+     * @var bool
+     */
+    protected static $withoutVendorCommands = false;
+
+    /**
+     * Whether to exclude the framework's default commands.
+     *
+     * @var bool
+     */
+    protected static $withoutDefaultCommands = false;
+
+    /**
+     * How many lines of output to buffer for each command when running in tabbed mode.
+     *
+     * @var int|null
+     */
+    protected static ?int $bufferSize = null;
+
+    /**
+     * How many lines of output to buffer total when running in stream mode.
+     *
+     * @var int|null
+     */
+    protected static ?int $streamBufferSize = null;
+
+    /**
      * Register the default development commands.
      *
      * @return void
@@ -56,13 +117,15 @@ class DevCommands
             return;
         }
 
-        foreach ([
-            'server' => 'php artisan serve --host=localhost',
-            'queue' => 'php artisan queue:listen --tries=1 --timeout=0',
-            'logs' => 'php artisan pail --timeout=0',
-            'vite' => self::getPackageManager()->getRunCommand('dev'),
-        ] as $name => $command) {
-            self::$commands[$name] = new DevCommand($command, $name);
+        self::artisan('serve', 'server');
+        self::artisan('queue:listen --tries=1 --timeout=0', 'queue');
+
+        if (function_exists('pcntl_fork') && app()->providerIsLoaded(PailServiceProvider::class)) {
+            self::artisan('pail --timeout=0', 'logs');
+        }
+
+        if (File::exists(base_path('package.json'))) {
+            self::node('dev', 'vite');
         }
     }
 
@@ -76,14 +139,20 @@ class DevCommands
     public static function register(string $command, ?string $name = null): DevCommand
     {
         if (! app()->runningInConsole()) {
-            return new DevCommand('', '');
+            return new DevCommand('', [], '');
         }
 
-        self::preventVendorRegistration($name ?? $command);
+        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        $source = self::resolveSource($trace);
+        $priority = self::resolvePriority($trace);
 
-        $devCommand = new DevCommand($command, $name);
+        $devCommand = new DevCommand($command, $source, $name, $priority);
 
-        self::$commands[$devCommand->name()] = $devCommand;
+        $existing = self::$commands[$devCommand->name()] ?? null;
+
+        if (! $existing || $devCommand->priority() >= $existing->priority()) {
+            self::$commands[$devCommand->name()] = $devCommand;
+        }
 
         return $devCommand;
     }
@@ -97,7 +166,7 @@ class DevCommands
      */
     public static function artisan(string $command, ?string $name = null): DevCommand
     {
-        return self::register("php artisan {$command}", $name ?? self::nameFromCommand($command));
+        return self::register("php artisan {$command}", $name ?? DevCommand::nameFromCommand($command));
     }
 
     /**
@@ -109,7 +178,7 @@ class DevCommands
      */
     public static function node(string $command, ?string $name = null): DevCommand
     {
-        return self::register(self::getPackageManager()->getRunCommand($command), $name ?? self::nameFromCommand($command));
+        return self::register(self::getPackageManager()->getRunCommand($command), $name ?? DevCommand::nameFromCommand($command));
     }
 
     /**
@@ -121,19 +190,27 @@ class DevCommands
      */
     public static function nodeExec(string $command, ?string $name = null): DevCommand
     {
-        return self::register(self::getPackageManager()->getExecCommand($command), $name ?? self::nameFromCommand($command));
+        return self::register(self::getPackageManager()->getExecCommand($command), $name ?? DevCommand::nameFromCommand($command));
     }
 
     /**
      * Get the registered development commands.
      *
-     * @return array
+     * @return DevCommandArray[]
      */
     public static function commands(): array
     {
         $commands = [];
 
         foreach (self::$commands as $command) {
+            if (self::$withoutVendorCommands && $command->priority() === DevCommand::PRIORITY_VENDOR) {
+                continue;
+            }
+
+            if (self::$withoutDefaultCommands && $command->priority() === DevCommand::PRIORITY_DEFAULT) {
+                continue;
+            }
+
             $cmd = $command->toArray();
 
             if ((! empty(self::$only) && ! in_array($cmd['name'], self::$only)) || in_array($cmd['name'], self::$except)) {
@@ -143,7 +220,160 @@ class DevCommands
             $commands[] = $cmd;
         }
 
+        $commands = self::applyOrder($commands);
+
         return self::fillInEmptyColors($commands);
+    }
+
+    /**
+     * Set the mode to inline, where all commands are run in the same terminal window.
+     *
+     * No-op on Windows.
+     *
+     * @return void
+     */
+    public static function inline(): void
+    {
+        self::$mode = DevCommandMode::INLINE;
+    }
+
+    /**
+     * Set the mode to stream, where all commands are run in the same terminal window, but their output is interactive within a TUI.
+     *
+     * No-op on Windows.
+     *
+     * @return void
+     */
+    public static function stream(): void
+    {
+        self::$mode = DevCommandMode::STREAM;
+    }
+
+    /**
+     * Set the mode to tabs, where each command is run in its own terminal tab.
+     *
+     * No-op on Windows.
+     *
+     * @return void
+     */
+    public static function tabs(): void
+    {
+        self::$mode = DevCommandMode::TABS;
+    }
+
+    /**
+     * Get the mode in which the "dev" command should run.
+     *
+     * @return DevCommandMode
+     */
+    public static function mode(): DevCommandMode
+    {
+        return self::$mode;
+    }
+
+    /**
+     * Enable timestamps in the output of the "dev" command.
+     *
+     * @return void
+     */
+    public static function withTimestamps(): void
+    {
+        self::$withTimestamps = true;
+    }
+
+    /**
+     * Determine if timestamps should be included in the output of the "dev" command.
+     *
+     * @return bool
+     */
+    public static function shouldIncludeTimestamps(): bool
+    {
+        return self::$withTimestamps;
+    }
+
+    /**
+     * Disable automatic restart of a "dev" command when it fails.
+     *
+     * @return void
+     */
+    public static function disableAutoRestart(): void
+    {
+        self::$autoRestart = false;
+    }
+
+    /**
+     * Determine if a "dev" command should automatically restart when it fails.
+     *
+     * @return bool
+     */
+    public static function shouldAutoRestart(): bool
+    {
+        return self::$autoRestart;
+    }
+
+    /**
+     * Set the number of lines of output to buffer for each command when running in tabbed mode.
+     *
+     * No-op on Windows.
+     *
+     * @param  int  $lines
+     * @return void
+     */
+    public static function bufferSize(int $lines): void
+    {
+        self::$bufferSize = $lines;
+    }
+
+    /**
+     * Get the number of lines of output to buffer for each command when running in tabbed mode.
+     *
+     * @return int|null
+     */
+    public static function getBufferSize(): ?int
+    {
+        return self::$bufferSize;
+    }
+
+    /**
+     * Set the number of lines of output to buffer total when running in stream mode.
+     *
+     * No-op on Windows.
+     *
+     * @param  int  $lines
+     * @return void
+     */
+    public static function streamBufferSize(int $lines): void
+    {
+        self::$streamBufferSize = $lines;
+    }
+
+    /**
+     * Get the number of lines of output to buffer total when running in stream mode.
+     *
+     * @return int|null
+     */
+    public static function getStreamBufferSize(): ?int
+    {
+        return self::$streamBufferSize;
+    }
+
+    /**
+     * Sort the given commands.
+     *
+     * @param  array  $commands
+     * @return array
+     */
+    protected static function applyOrder(array $commands): array
+    {
+        if (empty(self::$order)) {
+            return $commands;
+        }
+
+        $positions = array_flip(self::$order);
+
+        $commands = Arr::sort($commands, fn ($command) => $positions[$command['name']] ?? PHP_INT_MAX);
+
+        return array_values($commands);
     }
 
     /**
@@ -180,46 +410,62 @@ class DevCommands
     }
 
     /**
-     * Prevent automatic registration of DevCommands from within vendor packages.
+     * Resolve the first external caller frame from a debug backtrace.
      *
-     * @param  string  $name
-     * @return void
-     *
-     * @throws Exception
+     * @param  array<int, array{'file': string, 'line': int, 'class'?: string, 'function'?: string}>  $trace
+     * @return array{'file': string, 'line': int, 'class'?: string, 'function'?: string}
      */
-    protected static function preventVendorRegistration(string $name)
+    protected static function resolveSource(array $trace): array
     {
-        $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS);
+        foreach ($trace as $frame) {
+            if (($frame['file'] ?? null) === __FILE__) {
+                continue;
+            }
 
+            if (($frame['class'] ?? null) === self::class) {
+                continue;
+            }
+
+            return $frame;
+        }
+
+        return [];
+    }
+
+    /**
+     * Determine the registration priority from a debug backtrace.
+     *
+     * @param  array<int, array{'file': string, 'line': int, 'class'?: string, 'function'?: string}>  $trace
+     * @return int
+     */
+    protected static function resolvePriority(array $trace): int
+    {
         foreach ($trace as $frame) {
             $file = $frame['file'] ?? null;
             $class = $frame['class'] ?? null;
 
-            if ($class === self::class) {
+            if ($file === __FILE__) {
                 continue;
+            }
+
+            if ($class === self::class && ($frame['function'] ?? null) === 'registerDefaults') {
+                return DevCommand::PRIORITY_DEFAULT;
             }
 
             if (! $file && $class) {
                 $file = (new ReflectionClass($class))->getFileName();
             }
 
-            if ($file === base_path('artisan')) {
-                continue;
-            }
-
-            if (! $file) {
+            if (! $file || $file === base_path('artisan')) {
                 continue;
             }
 
             if (! str_contains($file, base_path('vendor'))) {
-                // We found at least one frame that came from userland code, we're good...
-                return;
+                return DevCommand::PRIORITY_USERLAND;
             }
         }
 
-        throw new Exception(
-            "DevCommands should be registered in application code, not within vendor packages. Attempted to register command: {$name}"
-        );
+        return DevCommand::PRIORITY_VENDOR;
     }
 
     /**
@@ -245,14 +491,34 @@ class DevCommands
     }
 
     /**
-     * Derive a command name from the given command string by taking the first word.
+     * Set the order in which named commands should run when running the "dev" command.
      *
-     * @param  string  $command
-     * @return string
+     * @param  array<int, string>  $names
+     * @return void
      */
-    protected static function nameFromCommand(string $command): string
+    public static function order(array $names): void
     {
-        return strstr($command, ' ', true);
+        self::$order = $names;
+    }
+
+    /**
+     * Exclude any commands from the vendor directory.
+     *
+     * @return void
+     */
+    public static function withoutVendorCommands(): void
+    {
+        self::$withoutVendorCommands = true;
+    }
+
+    /**
+     * Exclude the framework's default commands.
+     *
+     * @return void
+     */
+    public static function withoutDefaultCommands(): void
+    {
+        self::$withoutDefaultCommands = true;
     }
 
     /**
@@ -263,18 +529,5 @@ class DevCommands
     protected static function getPackageManager(): NodePackageManager
     {
         return self::$packageManager ??= new NodePackageManager();
-    }
-
-    /**
-     * Clear all registered development commands and reset the state of the DevCommands class.
-     *
-     * @return void
-     */
-    public static function clear(): void
-    {
-        self::$commands = [];
-        self::$except = [];
-        self::$only = [];
-        self::$colorCount = 0;
     }
 }

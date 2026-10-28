@@ -8,7 +8,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Number;
-use Illuminate\Support\Str;
+use Illuminate\Support\Stringable;
 use stdClass;
 
 use function Illuminate\Support\enum_value;
@@ -55,13 +55,7 @@ trait InteractsWithData
 
         $data = $this->all();
 
-        foreach ($keys as $value) {
-            if (! Arr::has($data, $value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($keys, fn ($value) => Arr::has($data, $value));
     }
 
     /**
@@ -82,10 +76,13 @@ trait InteractsWithData
     /**
      * Apply the callback if the instance contains the given key.
      *
+     * @template TReturn
+     * @template TReturnDefault = never
+     *
      * @param  string  $key
-     * @param  callable  $callback
-     * @param  callable|null  $default
-     * @return $this|mixed
+     * @param  callable(mixed): TReturn  $callback
+     * @param  (callable(): TReturnDefault)|null  $default
+     * @return $this|TReturn|TReturnDefault
      */
     public function whenHas($key, callable $callback, ?callable $default = null)
     {
@@ -110,13 +107,7 @@ trait InteractsWithData
     {
         $keys = is_array($key) ? $key : func_get_args();
 
-        foreach ($keys as $value) {
-            if ($this->isEmptyString($value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($keys, fn ($value) => ! $this->isEmptyString($value));
     }
 
     /**
@@ -129,13 +120,7 @@ trait InteractsWithData
     {
         $keys = is_array($key) ? $key : func_get_args();
 
-        foreach ($keys as $value) {
-            if (! $this->isEmptyString($value)) {
-                return false;
-            }
-        }
-
-        return true;
+        return array_all($keys, fn ($value) => $this->isEmptyString($value));
     }
 
     /**
@@ -148,22 +133,19 @@ trait InteractsWithData
     {
         $keys = is_array($keys) ? $keys : func_get_args();
 
-        foreach ($keys as $key) {
-            if ($this->filled($key)) {
-                return true;
-            }
-        }
-
-        return false;
+        return array_any($keys, fn ($key) => $this->filled($key));
     }
 
     /**
      * Apply the callback if the instance contains a non-empty value for the given key.
      *
+     * @template TReturn
+     * @template TReturnDefault = never
+     *
      * @param  string  $key
-     * @param  callable  $callback
-     * @param  callable|null  $default
-     * @return $this|mixed
+     * @param  callable(mixed): TReturn  $callback
+     * @param  (callable(): TReturnDefault)|null  $default
+     * @return $this|TReturn|TReturnDefault
      */
     public function whenFilled($key, callable $callback, ?callable $default = null)
     {
@@ -224,10 +206,13 @@ trait InteractsWithData
     /**
      * Apply the callback if the instance is missing the given key.
      *
+     * @template TReturn
+     * @template TReturnDefault = never
+     *
      * @param  string  $key
-     * @param  callable  $callback
-     * @param  callable|null  $default
-     * @return $this|mixed
+     * @param  callable(mixed): TReturn  $callback
+     * @param  (callable(): TReturnDefault)|null  $default
+     * @return $this|TReturn|TReturnDefault
      */
     public function whenMissing($key, callable $callback, ?callable $default = null)
     {
@@ -276,7 +261,7 @@ trait InteractsWithData
      */
     public function string($key, $default = null)
     {
-        return Str::of($this->data($key, $default));
+        return new Stringable($this->data($key, $default));
     }
 
     /**
@@ -328,7 +313,13 @@ trait InteractsWithData
      */
     public function clamp($key, $min, $max, $default = 0)
     {
-        return Number::clamp($this->data($key, $default), $min, $max);
+        $value = $this->data($key, $default);
+
+        if (! is_numeric($value)) {
+            $value = $default;
+        }
+
+        return Number::clamp($value, $min, $max);
     }
 
     /**
